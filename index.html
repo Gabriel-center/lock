@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+        <!DOCTYPE html>
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
@@ -121,8 +121,6 @@
         /* Utility classes para mudança de estado */
         .status-warning .top-info { border-left-color: #f39c12; }
         .status-warning #main-timer-display { color: #f39c12; }
-        .status-critical .top-info { border-left-color: #ff0000; }
-        .status-critical #main-timer-display { color: #ff0000; }
 
     </style>
 </head>
@@ -214,7 +212,7 @@
         const mainTimerLabel = document.getElementById('main-timer-label');
         const delayContainer = document.getElementById('delay-container');
         const delayDisplay = document.getElementById('delay-display');
-        const statusPanel = document.getElementById('lock-screen'); // Para mudar classes de cor
+        const statusPanel = document.getElementById('lock-screen'); 
 
         let clickCount = 0;
         let clickTimer = null;
@@ -222,7 +220,6 @@
         let countdownInterval = null;
         
         let targetTime = null;
-        let maxDelayTime = null;
         let delayMinutesInput = 0;
 
         // Toggle do campo de telefone
@@ -246,9 +243,6 @@
             targetTime = new Date();
             targetTime.setHours(hours, minutes, 0, 0);
 
-            // Se o horário já passou hoje (ex: são 23h e colocou 01h), assume que é amanhã?
-            // Para "Responsável Ausente", geralmente é no mesmo dia. Se for passado, entra direto no atraso.
-
             // 3. Configurar Contato
             if (showContact) {
                 if (!phoneVal) phoneVal = "19981721460";
@@ -270,7 +264,7 @@
             startFakeProgress();
             
             // Inicia Timer Real
-            updateTimerLogic(); // Roda uma vez já
+            updateTimerLogic(); 
             countdownInterval = setInterval(updateTimerLogic, 1000);
 
             // Bloqueios
@@ -284,42 +278,30 @@
             let diff = targetTime - now;
 
             if (diff > 0) {
-                // MODO: Contagem Regressiva Normal
+                // MODO 1: Contagem Regressiva Normal (AZUL)
                 mainTimerLabel.innerText = "RETORNO EM:";
                 mainTimerDisplay.innerText = formatTime(diff);
-                
-                // Garante estilo azul
-                statusPanel.classList.remove('status-warning', 'status-critical');
+                statusPanel.classList.remove('status-warning');
                 delayContainer.style.display = 'none';
 
             } else {
-                // O tempo acabou. Estamos no atraso?
-                mainTimerLabel.innerText = "STATUS:";
-                mainTimerDisplay.innerText = "AGUARDANDO RETORNO";
-                
-                // Calcula limite do atraso
-                // Se diff é negativo, o tempo passou.
-                // Delay em ms
+                // O tempo alvo passou. Verificar atraso.
                 const delayMs = delayMinutesInput * 60 * 1000;
-                
-                // Quanto tempo passou desde o alvo?
                 const timePassed = Math.abs(diff);
 
                 if (timePassed < delayMs) {
-                    // MODO: Tolerância (Atraso Permitido)
-                    statusPanel.classList.add('status-warning'); // Laranja
+                    // MODO 2: Tolerância (LARANJA)
+                    statusPanel.classList.add('status-warning'); 
                     delayContainer.style.display = 'block';
+                    mainTimerLabel.innerText = "STATUS:";
+                    mainTimerDisplay.innerText = "AGUARDANDO RETORNO";
                     
                     const remainingDelay = delayMs - timePassed;
                     delayDisplay.innerText = "TOLERÂNCIA: " + formatTime(remainingDelay);
 
                 } else {
-                    // MODO: Crítico (Estourou até a tolerância)
-                    statusPanel.classList.remove('status-warning');
-                    statusPanel.classList.add('status-critical'); // Vermelho
-                    
-                    mainTimerDisplay.innerText = "TEMPO EXCEDIDO";
-                    delayContainer.style.display = 'none';
+                    // MODO 3: TEMPO ESGOTADO -> FECHAR TUDO
+                    unlockSystem();
                 }
             }
         }
@@ -330,7 +312,6 @@
             const m = Math.floor((totalSeconds % 3600) / 60);
             const s = totalSeconds % 60;
             
-            // Formata HH:MM:SS ou MM:SS se horas for 0
             const hh = String(h).padStart(2, '0');
             const mm = String(m).padStart(2, '0');
             const ss = String(s).padStart(2, '0');
@@ -392,17 +373,16 @@
         }
 
         function unlockSystem() {
+            // Tenta fechar a janela/aba
             window.close();
+            
+            // Fallback 1: Sair do Fullscreen
             if (document.exitFullscreen) document.exitFullscreen();
             else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
 
-            // Mensagem Final
-            document.body.innerHTML = `
-                <div style="display:flex; height:100%; justify-content:center; align-items:center; background:#000; color:#0f0; font-family:monospace; flex-direction:column;">
-                    <h1>SISTEMA DESBLOQUEADO</h1>
-                    <button onclick="location.reload()" style="margin-top:20px; padding:10px 20px; cursor:pointer;">REINICIAR</button>
-                </div>
-            `;
+            // Fallback 2: Se o navegador bloquear o close(), forçar página em branco
+            document.body.innerHTML = "";
+            window.location.href = "about:blank";
         }
 
         // --- VISUAL ---
@@ -419,7 +399,6 @@
             const ctx = c.getContext('2d');
             c.width = window.innerWidth; c.height = window.innerHeight;
             
-            // Reajuste se redimensionar
             window.addEventListener('resize', () => {
                 c.width = window.innerWidth; c.height = window.innerHeight;
             });
@@ -436,14 +415,12 @@
                 ctx.fillStyle = 'rgba(11, 15, 25, 0.2)';
                 ctx.fillRect(0,0,c.width,c.height);
                 
-                // Cor muda baseada no estado (azul, laranja, vermelho)
-                let mainColor = '#3498db';
-                if(statusPanel.classList.contains('status-warning')) mainColor = '#f39c12';
-                if(statusPanel.classList.contains('status-critical')) mainColor = '#ff3333';
+                let mainColor = '#3498db'; // Azul padrão
+                if(statusPanel.classList.contains('status-warning')) mainColor = '#f39c12'; // Laranja no atraso
 
                 ctx.fillStyle = mainColor;
                 ctx.strokeStyle = mainColor;
-                ctx.globalAlpha = 0.2; // Transparência das linhas
+                ctx.globalAlpha = 0.2;
 
                 particles.forEach(p => {
                     p.x+=p.vx; p.y+=p.vy;
