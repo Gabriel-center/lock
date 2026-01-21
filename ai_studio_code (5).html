@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>System Monitor</title>
+    <style>
+        /* --- ESTILO GERAL --- */
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: #0b0f19; color: #a0c0ff;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden; user-select: none; -webkit-user-select: none;
+            cursor: none; /* Mouse escondido na tela de bloqueio */
+        }
+
+        /* --- TELA DE CONFIGURAÇÃO (SETUP) --- */
+        #setup-screen {
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            height: 100%; background: #111; color: #eee;
+            cursor: default; font-family: monospace; z-index: 100;
+        }
+
+        .config-box {
+            background: #1a1a1a; padding: 30px; border: 1px solid #333;
+            border-radius: 8px; width: 90%; max-width: 400px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        .config-box h2 { color: #3498db; margin-top: 0; text-transform: uppercase; }
+        
+        label { display: block; margin-top: 15px; font-size: 0.9rem; color: #aaa; }
+        
+        input[type="time"], input[type="text"], input[type="number"] {
+            width: 100%; padding: 10px; margin-top: 5px;
+            background: #000; border: 1px solid #444; color: #fff;
+            font-family: monospace; font-size: 1rem;
+        }
+
+        .checkbox-group { margin-top: 15px; display: flex; align-items: center; }
+        .checkbox-group input { width: auto; margin-right: 10px; }
+
+        button#start-btn {
+            width: 100%; margin-top: 25px; padding: 15px;
+            background: #3498db; border: none; color: white;
+            font-weight: bold; cursor: pointer; text-transform: uppercase;
+            transition: 0.2s;
+        }
+        button#start-btn:hover { background: #2980b9; }
+
+        /* --- TELA PRINCIPAL (BLOQUEIO) --- */
+        #lock-screen {
+            display: none; position: relative; width: 100%; height: 100%;
+            flex-direction: column; justify-content: space-between;
+            padding: 40px; z-index: 1;
+        }
+
+        canvas { position: absolute; top: 0; left: 0; z-index: 0; }
+
+        /* HEADER */
+        .top-info { z-index: 2; border-left: 5px solid #3498db; padding-left: 20px; transition: border-color 0.5s; }
+        h1 { font-size: 2rem; margin: 0; color: #fff; text-transform: uppercase; letter-spacing: 2px; }
+        
+        /* Timer Principal */
+        #main-timer-label { font-size: 1rem; color: #888; margin-top: 10px; font-family: monospace; }
+        #main-timer-display { font-size: 2.5rem; color: #3498db; font-family: monospace; font-weight: bold; letter-spacing: 2px; }
+
+        /* Timer de Atraso (Oculto inicialmente) */
+        #delay-container { display: none; margin-top: 5px; }
+        #delay-display { font-size: 1.2rem; color: #f39c12; font-family: monospace; }
+
+        /* FOOTER & EMERGENCY */
+        .bottom-info { z-index: 2; text-align: center; width: 100%; }
+        
+        .emergency-box {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid #444;
+            padding: 15px;
+            margin-bottom: 20px;
+            display: inline-block;
+            backdrop-filter: blur(4px);
+        }
+        .emergency-title { color: #f1c40f; font-weight: bold; font-size: 0.9rem; text-transform: uppercase; margin-bottom: 5px; }
+        .emergency-number { color: #fff; font-family: monospace; font-size: 1.2rem; letter-spacing: 1px; }
+
+        .progress-container { width: 100%; height: 4px; background: #111; margin-top: 10px; }
+        .progress-bar { height: 100%; background: #3498db; width: 0%; transition: width 0.5s; }
+
+        /* --- WARNING OVERLAY (AO TOCAR) --- */
+        #warning-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(200, 0, 0, 0.3); border: 4px solid red;
+            display: none; z-index: 10;
+            justify-content: center; align-items: center;
+            backdrop-filter: blur(3px);
+        }
+        .warning-msg {
+            background: #000; color: #ff3333; padding: 20px 40px;
+            border: 2px solid red; font-size: 1.5rem; font-weight: bold;
+            text-transform: uppercase; box-shadow: 0 0 50px red;
+        }
+
+        /* --- PASSWORD MODAL (TRIPLO CLIQUE) --- */
+        #password-modal {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); z-index: 20;
+            display: none; flex-direction: column;
+            justify-content: center; align-items: center;
+            cursor: auto; /* Mouse volta aqui */
+        }
+        .pwd-box { text-align: center; width: 300px; }
+        .pwd-label { color: #3498db; font-family: monospace; margin-bottom: 10px; display: block; }
+        #pwd-input {
+            width: 100%; padding: 10px; background: #000;
+            border: 1px solid #3498db; color: #fff; text-align: center;
+            font-size: 1.2rem; outline: none;
+        }
+        #pwd-error { color: red; font-size: 0.8rem; height: 20px; margin-top: 5px; visibility: hidden; }
+
+        /* Utility classes para mudança de estado */
+        .status-warning .top-info { border-left-color: #f39c12; }
+        .status-warning #main-timer-display { color: #f39c12; }
+        .status-critical .top-info { border-left-color: #ff0000; }
+        .status-critical #main-timer-display { color: #ff0000; }
+
+    </style>
+</head>
+<body>
+
+    <!-- 1. SETUP INICIAL -->
+    <div id="setup-screen">
+        <div class="config-box">
+            <h2>Configuração</h2>
+            
+            <label>Horário de Retorno (Ex: 14:30)</label>
+            <input type="time" id="input-time">
+
+            <label>Tempo de Tolerância (minutos)</label>
+            <input type="number" id="input-delay" placeholder="Ex: 5" min="0" value="0">
+
+            <div class="checkbox-group">
+                <input type="checkbox" id="check-contact">
+                <span>Exibir Contato de Urgência</span>
+            </div>
+
+            <div id="contact-field" style="display:none;">
+                <label>Número (Padrão: 19981721460)</label>
+                <input type="text" id="input-phone" placeholder="Digite apenas números">
+            </div>
+
+            <button id="start-btn" onclick="initLock()">BLOQUEAR SISTEMA</button>
+        </div>
+    </div>
+
+    <!-- 2. TELA DE BLOQUEIO -->
+    <div id="lock-screen" onclick="handleInteraction()">
+        <canvas id="bg-canvas"></canvas>
+
+        <div class="top-info" id="status-panel">
+            <h1>Responsável Ausente</h1>
+            
+            <!-- Contagem Regressiva -->
+            <div id="main-timer-label">RETORNO EM:</div>
+            <div id="main-timer-display">--:--:--</div>
+
+            <!-- Atraso (Só aparece se estourar o tempo) -->
+            <div id="delay-container">
+                <span id="delay-display">TOLERÂNCIA: 00:00</span>
+            </div>
+        </div>
+
+        <div class="bottom-info">
+            <!-- Box de Emergência (Dinâmico) -->
+            <div id="emergency-area" class="emergency-box" style="display:none;">
+                <div class="emergency-title">Em caso de urgência contate via WhatsApp ou Ligação para a senha:</div>
+                <div class="emergency-number" id="display-phone"></div>
+            </div>
+
+            <div style="font-size: 0.8rem; color: #555; margin-bottom:5px;">SISTEMA DE MONITORAMENTO ATIVO - NÃO TOCAR</div>
+            <div class="progress-container">
+                <div class="progress-bar" id="p-bar"></div>
+            </div>
+        </div>
+
+        <!-- Warning Overlay -->
+        <div id="warning-overlay">
+            <div class="warning-msg">ACESSO NEGADO<br><span style="font-size:0.7em; color:#fff;">Entrada não autorizada detectada</span></div>
+        </div>
+
+        <!-- Password Modal -->
+        <div id="password-modal">
+            <div class="pwd-box">
+                <span class="pwd-label">ROOT_USER // INSIRA A SENHA:</span>
+                <input type="password" id="pwd-input" autocomplete="off">
+                <div id="pwd-error">SENHA INCORRETA</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURAÇÃO E DADOS ---
+        const setupScreen = document.getElementById('setup-screen');
+        const lockScreen = document.getElementById('lock-screen');
+        const warningOverlay = document.getElementById('warning-overlay');
+        const passwordModal = document.getElementById('password-modal');
+        const pwdInput = document.getElementById('pwd-input');
+        const contactCheck = document.getElementById('check-contact');
+        const contactField = document.getElementById('contact-field');
+        const pBar = document.getElementById('p-bar');
+
+        // Timers & Elementos
+        const mainTimerDisplay = document.getElementById('main-timer-display');
+        const mainTimerLabel = document.getElementById('main-timer-label');
+        const delayContainer = document.getElementById('delay-container');
+        const delayDisplay = document.getElementById('delay-display');
+        const statusPanel = document.getElementById('lock-screen'); // Para mudar classes de cor
+
+        let clickCount = 0;
+        let clickTimer = null;
+        let progress = 0;
+        let countdownInterval = null;
+        
+        let targetTime = null;
+        let maxDelayTime = null;
+        let delayMinutesInput = 0;
+
+        // Toggle do campo de telefone
+        contactCheck.addEventListener('change', (e) => {
+            contactField.style.display = e.target.checked ? 'block' : 'none';
+        });
+
+        // --- INICIALIZAR SISTEMA ---
+        function initLock() {
+            // 1. Pegar Dados
+            const timeVal = document.getElementById('input-time').value;
+            delayMinutesInput = parseInt(document.getElementById('input-delay').value) || 0;
+            const showContact = document.getElementById('check-contact').checked;
+            let phoneVal = document.getElementById('input-phone').value.trim();
+
+            if (!timeVal) { alert("Defina o horário de retorno."); return; }
+
+            // 2. Calcular Data Alvo (Target)
+            const now = new Date();
+            const [hours, minutes] = timeVal.split(':');
+            targetTime = new Date();
+            targetTime.setHours(hours, minutes, 0, 0);
+
+            // Se o horário já passou hoje (ex: são 23h e colocou 01h), assume que é amanhã?
+            // Para "Responsável Ausente", geralmente é no mesmo dia. Se for passado, entra direto no atraso.
+
+            // 3. Configurar Contato
+            if (showContact) {
+                if (!phoneVal) phoneVal = "19981721460";
+                document.getElementById('emergency-area').style.display = "inline-block";
+                document.getElementById('display-phone').innerText = phoneVal;
+            }
+
+            // 4. Ativar Fullscreen
+            const el = document.documentElement;
+            if(el.requestFullscreen) el.requestFullscreen();
+            else if(el.webkitRequestFullScreen) el.webkitRequestFullScreen();
+
+            // 5. Trocar Telas
+            setupScreen.style.display = 'none';
+            lockScreen.style.display = 'flex';
+
+            // 6. Iniciar Loops
+            startCanvas();
+            startFakeProgress();
+            
+            // Inicia Timer Real
+            updateTimerLogic(); // Roda uma vez já
+            countdownInterval = setInterval(updateTimerLogic, 1000);
+
+            // Bloqueios
+            window.addEventListener('keydown', handleKeyBlock);
+            window.addEventListener('contextmenu', e => e.preventDefault());
+        }
+
+        // --- LÓGICA DO CRONÔMETRO ---
+        function updateTimerLogic() {
+            const now = new Date();
+            let diff = targetTime - now;
+
+            if (diff > 0) {
+                // MODO: Contagem Regressiva Normal
+                mainTimerLabel.innerText = "RETORNO EM:";
+                mainTimerDisplay.innerText = formatTime(diff);
+                
+                // Garante estilo azul
+                statusPanel.classList.remove('status-warning', 'status-critical');
+                delayContainer.style.display = 'none';
+
+            } else {
+                // O tempo acabou. Estamos no atraso?
+                mainTimerLabel.innerText = "STATUS:";
+                mainTimerDisplay.innerText = "AGUARDANDO RETORNO";
+                
+                // Calcula limite do atraso
+                // Se diff é negativo, o tempo passou.
+                // Delay em ms
+                const delayMs = delayMinutesInput * 60 * 1000;
+                
+                // Quanto tempo passou desde o alvo?
+                const timePassed = Math.abs(diff);
+
+                if (timePassed < delayMs) {
+                    // MODO: Tolerância (Atraso Permitido)
+                    statusPanel.classList.add('status-warning'); // Laranja
+                    delayContainer.style.display = 'block';
+                    
+                    const remainingDelay = delayMs - timePassed;
+                    delayDisplay.innerText = "TOLERÂNCIA: " + formatTime(remainingDelay);
+
+                } else {
+                    // MODO: Crítico (Estourou até a tolerância)
+                    statusPanel.classList.remove('status-warning');
+                    statusPanel.classList.add('status-critical'); // Vermelho
+                    
+                    mainTimerDisplay.innerText = "TEMPO EXCEDIDO";
+                    delayContainer.style.display = 'none';
+                }
+            }
+        }
+
+        function formatTime(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const h = Math.floor(totalSeconds / 3600);
+            const m = Math.floor((totalSeconds % 3600) / 60);
+            const s = totalSeconds % 60;
+            
+            // Formata HH:MM:SS ou MM:SS se horas for 0
+            const hh = String(h).padStart(2, '0');
+            const mm = String(m).padStart(2, '0');
+            const ss = String(s).padStart(2, '0');
+
+            if (h > 0) return `${hh}:${mm}:${ss}`;
+            return `${mm}:${ss}`;
+        }
+
+        // --- INTERAÇÃO (CLIQUES) ---
+        function handleInteraction() {
+            if (passwordModal.style.display === 'flex') return;
+
+            clickCount++;
+
+            if (clickCount < 3) showWarning();
+
+            if (clickCount === 1) {
+                clickTimer = setTimeout(() => { clickCount = 0; }, 600);
+            }
+
+            if (clickCount >= 3) {
+                openPasswordPrompt();
+                clickCount = 0;
+                clearTimeout(clickTimer);
+            }
+        }
+
+        function showWarning() {
+            warningOverlay.style.display = 'flex';
+            setTimeout(() => { warningOverlay.style.display = 'none'; }, 1000);
+        }
+
+        // --- SISTEMA DE SENHA ---
+        function handleKeyBlock(e) {
+            if(passwordModal.style.display === 'flex') {
+                if(e.key === "Enter") checkPassword();
+                return; 
+            }
+            e.preventDefault();
+        }
+
+        function openPasswordPrompt() {
+            passwordModal.style.display = 'flex';
+            pwdInput.value = "";
+            document.getElementById('pwd-error').style.visibility = "hidden";
+            setTimeout(() => pwdInput.focus(), 100);
+        }
+
+        function checkPassword() {
+            const pass = pwdInput.value;
+            if (pass === "acesso01") {
+                unlockSystem();
+            } else {
+                const err = document.getElementById('pwd-error');
+                err.style.visibility = "visible";
+                pwdInput.value = "";
+                setTimeout(() => { passwordModal.style.display = 'none'; }, 1500);
+            }
+        }
+
+        function unlockSystem() {
+            window.close();
+            if (document.exitFullscreen) document.exitFullscreen();
+            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+
+            // Mensagem Final
+            document.body.innerHTML = `
+                <div style="display:flex; height:100%; justify-content:center; align-items:center; background:#000; color:#0f0; font-family:monospace; flex-direction:column;">
+                    <h1>SISTEMA DESBLOQUEADO</h1>
+                    <button onclick="location.reload()" style="margin-top:20px; padding:10px 20px; cursor:pointer;">REINICIAR</button>
+                </div>
+            `;
+        }
+
+        // --- VISUAL ---
+        function startFakeProgress() {
+            setInterval(() => {
+                progress += Math.random() * 0.5;
+                if(progress > 100) progress = 0;
+                pBar.style.width = progress + '%';
+            }, 200);
+        }
+
+        function startCanvas() {
+            const c = document.getElementById('bg-canvas');
+            const ctx = c.getContext('2d');
+            c.width = window.innerWidth; c.height = window.innerHeight;
+            
+            // Reajuste se redimensionar
+            window.addEventListener('resize', () => {
+                c.width = window.innerWidth; c.height = window.innerHeight;
+            });
+
+            const particles = [];
+            for(let i=0; i<60; i++) {
+                particles.push({
+                    x: Math.random()*c.width, y: Math.random()*c.height,
+                    vx: (Math.random()-0.5)*0.5, vy: (Math.random()-0.5)*0.5
+                });
+            }
+
+            function draw() {
+                ctx.fillStyle = 'rgba(11, 15, 25, 0.2)';
+                ctx.fillRect(0,0,c.width,c.height);
+                
+                // Cor muda baseada no estado (azul, laranja, vermelho)
+                let mainColor = '#3498db';
+                if(statusPanel.classList.contains('status-warning')) mainColor = '#f39c12';
+                if(statusPanel.classList.contains('status-critical')) mainColor = '#ff3333';
+
+                ctx.fillStyle = mainColor;
+                ctx.strokeStyle = mainColor;
+                ctx.globalAlpha = 0.2; // Transparência das linhas
+
+                particles.forEach(p => {
+                    p.x+=p.vx; p.y+=p.vy;
+                    if(p.x<0||p.x>c.width) p.vx*=-1;
+                    if(p.y<0||p.y>c.height) p.vy*=-1;
+                    
+                    ctx.beginPath(); ctx.arc(p.x,p.y,2,0,Math.PI*2); ctx.fill();
+                    
+                    particles.forEach(p2 => {
+                        let d = Math.hypot(p.x-p2.x, p.y-p2.y);
+                        if(d<150) {
+                            ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+                        }
+                    });
+                });
+                requestAnimationFrame(draw);
+            }
+            draw();
+        }
+
+        pwdInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') checkPassword();
+        });
+    </script>
+</body>
+</html>
